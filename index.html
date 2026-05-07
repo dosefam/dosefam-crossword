@@ -1,0 +1,1173 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1" />
+<title>EDD Crossword · 28 words. One scoop. No jitters.</title>
+<meta name="theme-color" content="#E6248B" />
+<meta property="og:title" content="EDD Crossword" />
+<meta property="og:description" content="28 words. One scoop. No jitters." />
+<style>
+  /* ---------------------------------------------------------------- *
+   *  EDD Crossword — mobile-first, single-file
+   * ---------------------------------------------------------------- */
+
+  :root{
+    --pink-1:#FF3DA1;
+    --pink-2:#E6248B;
+    --pink-3:#C9156F;
+    --pink-glow:#FF7BC4;
+    --white:#ffffff;
+    --ink:#2A0A1A;
+    --soft:#FFD1E8;
+    --good:#16C76C;
+    --bad:#FF4D4D;
+    --highlight:rgba(6, 187, 233, 0.45);     /* active cell — same hue, stronger */
+    --highlight-soft:rgba(6, 187, 233, 0.20); /* word-in-focus */
+    --solved:#4f439b;                          /* completed word fill */
+
+    --cell: 36px;        /* default cell size, tuned in JS for mobile */
+    --gap: 2px;
+    --radius: 6px;
+
+    --shadow-sm: 0 1px 2px rgba(0,0,0,.08);
+    --shadow-md: 0 6px 18px rgba(48,0,30,.18);
+    --shadow-lg: 0 16px 40px rgba(48,0,30,.28);
+  }
+
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+
+  html, body{margin:0; padding:0; min-height:100%; overscroll-behavior-y:none;}
+  body{
+    font-family: ui-sans-serif, system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+    color:var(--white);
+    background:
+      radial-gradient(120% 60% at 30% 0%, var(--pink-glow) 0%, transparent 50%),
+      radial-gradient(140% 80% at 70% 100%, var(--pink-3) 0%, transparent 60%),
+      linear-gradient(180deg, var(--pink-1) 0%, var(--pink-2) 60%, var(--pink-3) 100%);
+    background-attachment: fixed;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    /* iOS safe areas */
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  /* prevent page zoom on input focus iOS */
+  input, button{font-size:16px;}
+
+  .wrap{
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 16px 14px 140px;
+  }
+
+  /* ---------- header ---------- */
+  header{
+    text-align:center;
+    padding: 10px 6px 4px;
+  }
+  .title{
+    font-family: "Helvetica Neue", "Helvetica", "Arial Black", sans-serif;
+    font-weight: 900;
+    letter-spacing: -0.02em;
+    font-size: clamp(34px, 9vw, 54px);
+    line-height: .95;
+    margin: 0;
+    text-transform: uppercase;
+    color: var(--white);
+    text-shadow: 0 2px 0 rgba(0,0,0,.06), 0 12px 30px rgba(48,0,30,.25);
+  }
+  .tag{
+    margin-top: 8px;
+    font-weight:500;
+    font-size: clamp(14px, 3.6vw, 18px);
+    opacity:.95;
+    letter-spacing: .01em;
+  }
+  .stats{
+    margin: 14px auto 6px;
+    display:flex; gap:8px; justify-content:center; flex-wrap:wrap;
+    font-weight:600;
+  }
+  .pill{
+    background: rgba(255,255,255,.18);
+    border: 1px solid rgba(255,255,255,.35);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    padding: 6px 12px;
+    border-radius: 999px;
+    font-size: 13px;
+    color:#fff;
+    display:inline-flex; align-items:center; gap:6px;
+  }
+  .pill b{font-weight:800;}
+  .pill .dot{width:7px; height:7px; border-radius:50%; background:var(--white);}
+
+  /* ---------- grid ---------- */
+  .board-shell{
+    position: relative;
+    margin: 12px auto 18px;
+    padding: 14px 10px;
+    border-radius: 18px;
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.18);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    overflow: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .grid{
+    display:grid;
+    gap: var(--gap);
+    margin: 0 auto;
+    width: max-content;
+  }
+  .cell{
+    width: var(--cell);
+    height: var(--cell);
+    position: relative;
+    background: transparent;
+  }
+  .cell.blocked{ background: transparent; }
+  .cell.cell-fill{
+    background: var(--white);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-sm);
+  }
+  .cell.cell-fill.in-word{
+    background: var(--highlight-soft);
+  }
+  .cell.cell-fill.active{
+    background: var(--highlight);
+    box-shadow: 0 0 0 2px var(--ink) inset, var(--shadow-md);
+  }
+  /* Word fully solved — fill cell purple. Active/in-word state still wins visually. */
+  .cell.cell-fill.solved-cell{
+    background: var(--solved);
+  }
+  .cell.cell-fill.solved-cell .letter{
+    color: #fff;
+  }
+  .cell.cell-fill.solved-cell .num{
+    color: #fff;
+  }
+  /* if a solved cell is also part of the active word, show the highlight on top */
+  .cell.cell-fill.solved-cell.in-word{
+    background: linear-gradient(var(--highlight-soft), var(--highlight-soft)), var(--solved);
+  }
+  .cell.cell-fill.solved-cell.active{
+    background: linear-gradient(var(--highlight), var(--highlight)), var(--solved);
+  }
+  .cell .num{
+    position:absolute; top:1px; left:3px;
+    font-size: 9px;
+    font-weight: 700;
+    color: var(--ink);
+    line-height: 1;
+    pointer-events:none;
+  }
+  .cell .letter{
+    width:100%; height:100%;
+    display:flex; align-items:center; justify-content:center;
+    font-family: "Helvetica Neue", "Arial Black", sans-serif;
+    font-weight: 800;
+    color: var(--ink);
+    text-transform: uppercase;
+    /* size scales with cell */
+    font-size: calc(var(--cell) * 0.55);
+    line-height: 1;
+    border-radius: var(--radius);
+    user-select: none;
+    -webkit-user-select: none;
+    pointer-events: none;
+  }
+  .cell.correct .letter{ color: var(--good); }
+  .cell.wrong .letter  { color: var(--bad);  }
+  /* purple-filled solved cells should keep white text even if also "correct" */
+  .cell.solved-cell.correct .letter{ color: #fff; }
+  .cell.revealed::after{
+    content:"";
+    position:absolute; top:2px; right:2px;
+    width:6px; height:6px; border-radius:50%;
+    background: var(--good); opacity:.7;
+  }
+
+  /* ---------- clue bar (active clue floating above keyboard) ---------- */
+  .cluebar{
+    position: fixed;
+    left: 0; right: 0;
+    bottom: 0;
+    padding: 12px 14px calc(14px + env(safe-area-inset-bottom));
+    background: linear-gradient(180deg, rgba(201,21,111,.0) 0%, rgba(201,21,111,.95) 30%, rgba(201,21,111,1) 100%);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    z-index: 20;
+    display:flex; align-items:center; gap:10px;
+    transform: translateY(0);
+    transition: transform .25s ease;
+  }
+  .cluebar.hidden{ transform: translateY(120%); }
+  .cluebar .arrow{
+    flex:0 0 auto;
+    background: rgba(255,255,255,.16);
+    border: 1px solid rgba(255,255,255,.3);
+    color:#fff;
+    width: 38px; height: 38px;
+    border-radius: 12px;
+    font-size: 20px;
+    display:grid; place-items:center;
+    cursor:pointer;
+  }
+  .cluebar .arrow:active{ transform: scale(.94); }
+  .cluebar .clue-text{
+    flex:1 1 auto;
+    color:#fff;
+    font-size: 15px;
+    line-height: 1.25;
+    font-weight: 600;
+  }
+  .cluebar .clue-text .label{
+    display:inline-block;
+    font-weight:800;
+    font-size: 12px;
+    background: var(--white);
+    color: var(--pink-3);
+    padding: 2px 8px;
+    border-radius: 999px;
+    margin-right: 8px;
+    vertical-align: 2px;
+  }
+
+  /* ---------- clue lists ---------- */
+  .clues{
+    display:grid;
+    grid-template-columns: 1fr;
+    gap: 14px;
+    margin-top: 10px;
+  }
+  @media (min-width: 600px){
+    .clues{ grid-template-columns: 1fr 1fr; }
+  }
+  .clue-col h2{
+    font-size: 18px;
+    margin: 4px 0 6px;
+    font-weight: 800;
+    text-transform:uppercase;
+    letter-spacing:.04em;
+    border-bottom: 2px solid rgba(255,255,255,.4);
+    padding-bottom: 6px;
+  }
+  .clue-list{
+    list-style:none; margin:0; padding:0;
+    display:flex; flex-direction:column; gap:2px;
+  }
+  .clue-item{
+    /* static reference text — no click handler */
+    cursor: default;
+    padding: 8px 10px;
+    border-radius: 10px;
+    color:#fff;
+    font-size: 14px;
+    line-height:1.3;
+    display:flex; gap:8px;
+    background: rgba(255,255,255,.06);
+  }
+  .clue-item .n{
+    flex:0 0 auto;
+    font-weight:800;
+    min-width: 24px;
+  }
+
+  /* ---------- toolbar ---------- */
+  .tools{
+    display:flex; flex-wrap:wrap; gap:8px; justify-content:center;
+    margin: 4px 0 14px;
+  }
+  .btn{
+    appearance:none; border:0; cursor:pointer;
+    background: var(--white);
+    color: var(--pink-3);
+    font-weight:800;
+    font-size: 13px;
+    letter-spacing:.02em;
+    padding: 9px 14px;
+    border-radius: 999px;
+    box-shadow: var(--shadow-sm);
+    text-transform:uppercase;
+  }
+  .btn.ghost{
+    background: rgba(255,255,255,.12);
+    color:#fff;
+    border:1px solid rgba(255,255,255,.4);
+  }
+  .btn.primary{
+    background: var(--ink);
+    color: var(--white);
+  }
+  .btn:active{ transform: translateY(1px); }
+  .btn:disabled{ opacity:.5; cursor:default; }
+
+  /* ---------- finish modal ---------- */
+  .modal{
+    position: fixed; inset: 0;
+    background: rgba(20,0,12,.6);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    display:none; align-items:center; justify-content:center;
+    padding: 20px;
+    z-index: 50;
+  }
+  .modal.open{ display:flex; }
+  .card{
+    background: linear-gradient(180deg, var(--pink-1), var(--pink-3));
+    color:#fff;
+    border-radius: 22px;
+    width: 100%; max-width: 380px;
+    padding: 22px 18px 18px;
+    box-shadow: var(--shadow-lg);
+    text-align:center;
+    border: 1px solid rgba(255,255,255,.25);
+  }
+  .card h3{
+    margin: 6px 0 4px;
+    font-size: 26px;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing:-.01em;
+  }
+  .card .sub{ font-size: 14px; opacity:.95; margin-bottom: 14px;}
+  .scoregrid{
+    display:grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 4px;
+    margin: 12px auto 14px;
+    max-width: 240px;
+  }
+  .scoregrid span{
+    aspect-ratio: 1/1;
+    border-radius: 4px;
+    background: rgba(255,255,255,.25);
+  }
+  .scoregrid span.ok{ background: #FFE066; }
+  .card .actions{ display:flex; flex-direction:column; gap:8px; margin-top: 8px; }
+
+  /* small tweaks */
+  .footer-spacer{ height: 90px; }
+  .toast{
+    position: fixed; left: 50%; bottom: calc(80px + env(safe-area-inset-bottom));
+    transform: translateX(-50%) translateY(20px);
+    background: var(--ink); color:#fff;
+    padding: 8px 14px; border-radius: 999px;
+    font-size: 13px; font-weight:600;
+    opacity: 0; pointer-events: none;
+    transition: opacity .2s ease, transform .2s ease;
+    z-index: 60;
+  }
+  .toast.show{ opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  /* Hidden capture input. Sits fixed at the top of the viewport so when iOS
+     auto-scrolls a focused input into view, nothing visible moves. The element
+     itself is invisible and pointer-inert. */
+  .keyboard-anchor{
+    position: fixed;
+    top: 0; left: 0;
+    width: 1px; height: 1px;
+    opacity: 0;
+    border: 0; padding: 0; margin: 0;
+    pointer-events: none;
+    z-index: -1;
+    /* font-size 16px+ avoids iOS zoom-on-focus */
+    font-size: 16px;
+    /* prevent any visible caret artifacts on some browsers */
+    color: transparent;
+    background: transparent;
+    -webkit-text-fill-color: transparent;
+    caret-color: transparent;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <h1 class="title">EDD Crossword</h1>
+    <div class="tag">28 words. One scoop. No jitters.</div>
+    <div class="stats">
+      <span class="pill"><span class="dot"></span> Solved <b id="stat-solved">0</b>/28</span>
+      <span class="pill">Filled <b id="stat-filled">0%</b></span>
+    </div>
+  </header>
+
+  <div class="tools">
+    <button class="btn ghost" id="btn-check">Check</button>
+    <button class="btn ghost" id="btn-reveal-letter">Reveal letter</button>
+    <button class="btn ghost" id="btn-reveal-word">Reveal word</button>
+    <button class="btn ghost" id="btn-clear">Clear</button>
+    <button class="btn primary" id="btn-finish">I'm done</button>
+  </div>
+
+  <div class="board-shell">
+    <div class="grid" id="grid" role="grid" aria-label="Crossword grid"></div>
+  </div>
+
+  <!-- Hidden capture input. Fixed at the top of the viewport so when iOS
+       auto-scrolls a focused input into view, nothing visible moves. All
+       keystrokes flow through here; per-cell elements never receive focus. -->
+  <input class="keyboard-anchor" id="anchor" type="text"
+         inputmode="text"
+         autocapitalize="characters"
+         autocomplete="off"
+         autocorrect="off"
+         spellcheck="false"
+         aria-label="Crossword input" />
+
+  <div class="clues">
+    <div class="clue-col">
+      <h2>Across</h2>
+      <ul class="clue-list" id="clues-across"></ul>
+    </div>
+    <div class="clue-col">
+      <h2>Down</h2>
+      <ul class="clue-list" id="clues-down"></ul>
+    </div>
+  </div>
+
+  <div class="footer-spacer"></div>
+</div>
+
+<!-- floating active clue bar -->
+<div class="cluebar hidden" id="cluebar">
+  <button class="arrow" id="prev-clue" aria-label="Previous clue">‹</button>
+  <div class="clue-text"><span class="label" id="clue-label">A1</span><span id="clue-content">Tap a cell to start</span></div>
+  <button class="arrow" id="next-clue" aria-label="Next clue">›</button>
+</div>
+
+<!-- finish modal -->
+<div class="modal" id="modal">
+  <div class="card">
+    <h3 id="modal-title">Nice work!</h3>
+    <div class="sub" id="modal-sub">You finished the EDD Crossword.</div>
+    <div class="scoregrid" id="scoregrid"></div>
+    <div style="font-weight:800; font-size:24px; margin: 8px 0 4px;" id="score-line">0/28 solved</div>
+    <div style="font-size:13px; opacity:.9;" id="time-line"></div>
+    <div class="actions">
+      <button class="btn primary" id="btn-share">Share my score</button>
+      <button class="btn ghost" id="btn-keep">Keep playing</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ============================================================
+ * DATA
+ * ============================================================ */
+const ROWS = 19, COLS = 19;
+
+// 1 = fillable cell, 0 = blocked
+const FILLED = [
+  [0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0],
+  [0,0,0,0,0,0,0,0,0,0,0,1,0,1,0,0,0,0,0],
+  [0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,0,0],
+  [0,0,0,0,0,0,0,0,0,1,0,1,0,1,0,0,0,0,0],
+  [0,0,1,1,1,1,1,0,0,1,0,0,0,1,1,1,1,1,0],
+  [0,0,0,0,0,0,1,0,0,1,0,0,0,1,0,0,0,0,0],
+  [0,0,0,0,1,1,1,1,0,1,1,1,1,1,1,1,0,0,0],
+  [0,0,0,1,0,0,1,0,0,1,0,0,1,0,0,1,1,1,0],
+  [0,1,0,1,0,0,1,0,0,1,0,0,1,0,0,1,0,0,0],
+  [1,1,1,1,0,1,1,1,1,1,1,1,1,1,0,1,1,1,1],
+  [0,1,0,1,0,0,1,0,1,0,0,1,0,0,0,1,0,0,0],
+  [0,1,0,1,0,1,0,1,1,1,1,1,1,1,1,0,1,0,0],
+  [0,0,0,1,0,1,0,0,1,0,0,1,0,0,0,0,1,0,0],
+  [0,0,1,1,1,1,1,1,1,0,0,1,0,0,1,1,1,1,1],
+  [0,0,0,0,0,1,0,0,1,0,0,1,0,0,0,0,1,0,0],
+  [0,0,0,0,0,1,0,0,1,0,1,1,1,1,1,1,1,0,0],
+  [0,1,1,1,1,1,0,0,1,0,0,0,0,0,0,0,0,0,0],
+  [0,0,0,0,1,0,0,0,1,1,1,1,1,1,1,0,0,0,0],
+  [0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+];
+
+const ACROSS = {
+  3:  { r:2,  c:11, word:'ENERGY',    clue:'What your morning cup brings' },
+  5:  { r:4,  c:2,  word:'SCOOP',     clue:'One ____ per cup, then froth' },
+  7:  { r:4,  c:13, word:'SPOON',     clue:'Stir-and-scoop utensil' },
+  8:  { r:6,  c:4,  word:'MOOD',      clue:'Balanced by Coffee+' },
+  9:  { r:6,  c:9,  word:'TUMBLER',   clue:'Month 3 freebie' },
+  13: { r:7,  c:15, word:'OAT',       clue:'Humble grain milk' },
+  15: { r:9,  c:0,  word:'DOSE',      clue:'What the Dose Fam takes daily' },
+  16: { r:9,  c:5,  word:'LIONSMANE', clue:'Shaggy focus mushroom (2 wds)' },
+  19: { r:9,  c:15, word:'SKIN',      clue:'Where collagen shines' },
+  21: { r:11, c:7,  word:'COLLAGEN',  clue:'Skin-and-joint protein in your scoop' },
+  23: { r:13, c:2,  word:'FROTHER',   clue:'Whisks your latte into bubbly bliss' },
+  24: { r:13, c:14, word:'FOCUS',     clue:'What lion\u2019s mane sharpens' },
+  25: { r:15, c:10, word:'VANILLA',   clue:'Classic new creamer flavor' },
+  26: { r:16, c:1,  word:'CHAGA',     clue:'Antioxidant partner of lion\u2019s mane' },
+  28: { r:17, c:8,  word:'CARAMEL',   clue:'Sweet sticky creamer flavor' },
+};
+
+const DOWN = {
+  1:  { r:0,  c:11, word:'BREW',      clue:'Coffee in its simplest form' },
+  2:  { r:1,  c:13, word:'VESSEL',    clue:'Storage freebie from Month 2' },
+  4:  { r:3,  c:9,  word:'JITTERS',   clue:'Regular coffee crash side effect, skipped on Dose' },
+  6:  { r:4,  c:6,  word:'PROTEIN',   clue:'Four flavors that use whey ____' },
+  10: { r:6,  c:12, word:'BEAN',      clue:'The roasted seed itself' },
+  11: { r:6,  c:15, word:'ROAST',     clue:'Mild or Medium' },
+  12: { r:7,  c:3,  word:'CREAMER',   clue:'A2, dairy-free or seasonal' },
+  14: { r:8,  c:1,  word:'FOAM',      clue:'Bubbly crown on a frothed cup' },
+  17: { r:9,  c:8,  word:'NOOTROPIC', clue:'Brain-boosting ingredient class' },
+  18: { r:9,  c:11, word:'ARABICA',   clue:'Premium bean variety in Coffee+' },
+  20: { r:11, c:5,  word:'MATCHA',    clue:'Ceremonial-grade green powder' },
+  22: { r:11, c:16, word:'MOCHA',     clue:'Espresso meets chocolate' },
+  27: { r:16, c:4,  word:'GUT',       clue:'____ health, supported by Dose' },
+};
+
+const TOTAL_WORDS =
+  Object.keys(ACROSS).length + Object.keys(DOWN).length; // 28
+
+/* ============================================================
+ * STATE
+ * ============================================================ */
+const state = {
+  // user inputs grid: empty string '' for empty, single char for filled
+  user: Array.from({length: ROWS}, () => Array(COLS).fill('')),
+  // letter-correct flag (only set when "check" is run): null | true | false
+  checked: Array.from({length: ROWS}, () => Array(COLS).fill(null)),
+  // revealed cells
+  revealed: Array.from({length: ROWS}, () => Array(COLS).fill(false)),
+  active: { r: -1, c: -1, dir: 'A' },     // dir: 'A' across, 'D' down
+  startTime: Date.now(),
+};
+
+/* number assignment from FILLED grid (replicates Python logic) */
+const cellNumber = Array.from({length: ROWS}, () => Array(COLS).fill(0));
+const acrossStarts = {}; // num -> {r, c, len}
+const downStarts   = {};
+(function numberCells(){
+  function isFill(r,c){ return r>=0 && c>=0 && r<ROWS && c<COLS && FILLED[r][c]===1; }
+  let n = 0;
+  for(let r=0;r<ROWS;r++){
+    for(let c=0;c<COLS;c++){
+      if(!isFill(r,c)) continue;
+      const sa = !isFill(r, c-1) && isFill(r, c+1);
+      const sd = !isFill(r-1, c) && isFill(r+1, c);
+      if(sa || sd){
+        n++;
+        cellNumber[r][c] = n;
+        if(sa){
+          let len=0; while(isFill(r, c+len)) len++;
+          acrossStarts[n] = {r,c,len};
+        }
+        if(sd){
+          let len=0; while(isFill(r+len, c)) len++;
+          downStarts[n] = {r,c,len};
+        }
+      }
+    }
+  }
+})();
+
+/* map cell -> the across/down clue numbers it belongs to */
+const cellAcross = Array.from({length: ROWS}, () => Array(COLS).fill(null));
+const cellDown   = Array.from({length: ROWS}, () => Array(COLS).fill(null));
+for(const [num, {r,c,len}] of Object.entries(acrossStarts)){
+  for(let i=0;i<len;i++) cellAcross[r][c+i] = +num;
+}
+for(const [num, {r,c,len}] of Object.entries(downStarts)){
+  for(let i=0;i<len;i++) cellDown[r+i][c] = +num;
+}
+
+/* ============================================================
+ * RENDER
+ * ============================================================ */
+const $grid = document.getElementById('grid');
+const $cluesA = document.getElementById('clues-across');
+const $cluesD = document.getElementById('clues-down');
+const $cluebar = document.getElementById('cluebar');
+const $clueLabel = document.getElementById('clue-label');
+const $clueContent = document.getElementById('clue-content');
+const $statSolved = document.getElementById('stat-solved');
+const $statFilled = document.getElementById('stat-filled');
+
+function buildGrid(){
+  // size cells based on viewport
+  sizeGrid();
+
+  $grid.style.gridTemplateColumns = `repeat(${COLS}, var(--cell))`;
+  $grid.style.gridTemplateRows    = `repeat(${ROWS}, var(--cell))`;
+  $grid.innerHTML = '';
+  for(let r=0;r<ROWS;r++){
+    for(let c=0;c<COLS;c++){
+      const div = document.createElement('div');
+      div.className = 'cell' + (FILLED[r][c]===1 ? ' cell-fill' : ' blocked');
+      div.dataset.r = r; div.dataset.c = c;
+      if(FILLED[r][c]===1){
+        const n = cellNumber[r][c];
+        if(n){
+          const tag = document.createElement('span');
+          tag.className = 'num';
+          tag.textContent = n;
+          div.appendChild(tag);
+        }
+        // Letter display — a plain div, NOT an input. This avoids iOS auto-scroll
+        // when typing. All input is captured through the off-screen #anchor input.
+        const lt = document.createElement('div');
+        lt.className = 'letter';
+        lt.dataset.r = r; lt.dataset.c = c;
+        div.appendChild(lt);
+      }
+      $grid.appendChild(div);
+    }
+  }
+}
+
+function sizeGrid(){
+  // available width: viewport - shell padding (10*2) - wrap padding (14*2) - small buffer
+  const vw = Math.min(window.innerWidth, 720);
+  const avail = vw - 28 /*wrap padding*/ - 20 /*shell padding*/ - 4 /*scrollbar safety*/;
+  const gap = 2;
+  const target = Math.floor((avail - gap*(COLS-1)) / COLS);
+  const size = Math.max(20, Math.min(40, target));
+  document.documentElement.style.setProperty('--cell', size + 'px');
+}
+
+function buildClueLists(){
+  // Clue lists are intentionally static reference text. They have NO click
+  // handlers, NO active-state styling, and NO DOM mutations after this initial
+  // build. This is to prevent iOS from auto-scrolling the page toward
+  // mid-document elements when something on the grid changes.
+  const mk = (num, c) => {
+    const li = document.createElement('li');
+    li.className = 'clue-item';
+    li.dataset.num = num; li.dataset.dir = c.dir;
+    li.innerHTML = `<span class="n">${num}.</span><span>${c.clue}</span>`;
+    return li;
+  };
+  for(const num of Object.keys(ACROSS).map(Number).sort((a,b)=>a-b)){
+    $cluesA.appendChild(mk(num, {clue: ACROSS[num].clue, dir:'A'}));
+  }
+  for(const num of Object.keys(DOWN).map(Number).sort((a,b)=>a-b)){
+    $cluesD.appendChild(mk(num, {clue: DOWN[num].clue, dir:'D'}));
+  }
+}
+
+/* ============================================================
+ * INTERACTION
+ * ============================================================ */
+function getLetter(r, c){
+  return $grid.querySelector(`.letter[data-r="${r}"][data-c="${c}"]`);
+}
+function getCell(r, c){
+  return $grid.querySelector(`.cell[data-r="${r}"][data-c="${c}"]`);
+}
+
+function clearHighlights(){
+  $grid.querySelectorAll('.cell.in-word, .cell.active').forEach(el=>{
+    el.classList.remove('in-word','active');
+  });
+  // Note: clue list items are NEVER touched after initial render. They are
+  // pure static text. Any DOM mutation on the clue list could cause iOS to
+  // recompute layout and trigger an auto-scroll to the focused element.
+}
+
+function setActive(r, c, dir, focus=false){
+  if(FILLED[r][c] !== 1) return;
+  // If this direction has no word at this cell, swap
+  if(dir==='A' && !cellAcross[r][c]) dir = 'D';
+  if(dir==='D' && !cellDown[r][c])   dir = 'A';
+  state.active = { r, c, dir };
+  clearHighlights();
+  // highlight the entire word
+  const num = (dir==='A' ? cellAcross[r][c] : cellDown[r][c]);
+  const start = (dir==='A' ? acrossStarts[num] : downStarts[num]);
+  for(let i=0; i<start.len; i++){
+    const rr = dir==='A' ? start.r : start.r+i;
+    const cc = dir==='A' ? start.c+i : start.c;
+    getCell(rr,cc).classList.add('in-word');
+  }
+  getCell(r, c).classList.add('active');
+  // (No clue-list highlight here — see clearHighlights() comment.)
+  // update cluebar — this is the floating bar at the bottom which shows
+  // the active clue. It's a fixed-position element so DOM updates here
+  // don't shift any flow content and can't cause scrolling.
+  const data = dir==='A' ? ACROSS[num] : DOWN[num];
+  $clueLabel.textContent = (dir==='A' ? 'A' : 'D') + num;
+  $clueContent.textContent = data.clue;
+  $cluebar.classList.remove('hidden');
+  // Keep the off-screen anchor input focused — this is what receives keystrokes
+  // on mobile. Critically, we do NOT focus per-cell elements (they aren't inputs
+  // anymore), so iOS won't scroll anything into view on each keypress.
+  if(focus) focusAnchor();
+}
+
+function moveActive(deltaWord, dir){
+  // Move cursor one cell forward/backward in the current word direction
+  const {r, c} = state.active;
+  const D = dir || state.active.dir;
+  const dr = D==='D' ? deltaWord : 0;
+  const dc = D==='A' ? deltaWord : 0;
+  const nr = r + dr, nc = c + dc;
+  if(nr<0||nr>=ROWS||nc<0||nc>=COLS) return false;
+  if(FILLED[nr][nc] !== 1) return false;
+  setActive(nr, nc, D, true);
+  return true;
+}
+
+function jumpToNextEmptyInWord(){
+  const {r, c, dir} = state.active;
+  const num = dir==='A' ? cellAcross[r][c] : cellDown[r][c];
+  const start = dir==='A' ? acrossStarts[num] : downStarts[num];
+  // search forward from current cell
+  for(let i=0;i<start.len;i++){
+    const rr = dir==='A' ? start.r : start.r+i;
+    const cc = dir==='A' ? start.c+i : start.c;
+    if(state.user[rr][cc] === '' && (rr!==r || cc!==c)){
+      setActive(rr, cc, dir, true);
+      return true;
+    }
+  }
+  return false;
+}
+
+function nextClue(delta){
+  // build ordered list of clues by direction, then number
+  const all = [];
+  Object.keys(ACROSS).map(Number).sort((a,b)=>a-b).forEach(n=>all.push({dir:'A', num:n}));
+  Object.keys(DOWN).map(Number).sort((a,b)=>a-b).forEach(n=>all.push({dir:'D', num:n}));
+  const {r, c, dir} = state.active;
+  const curNum = dir==='A' ? cellAcross[r][c] : cellDown[r][c];
+  let idx = all.findIndex(x => x.dir===dir && x.num===curNum);
+  if(idx<0) idx = 0;
+  const next = all[(idx + delta + all.length) % all.length];
+  const start = next.dir==='A' ? acrossStarts[next.num] : downStarts[next.num];
+  setActive(start.r, start.c, next.dir, true);
+}
+
+/* ============================================================
+ * INPUT HANDLING (the nuanced part for mobile)
+ * ============================================================ */
+function handleKey(key){
+  const {r, c, dir} = state.active;
+  if(r<0) return;
+
+  if(key === 'BACK'){
+    // If current empty, move back and clear; else clear current
+    if(state.user[r][c] === ''){
+      const stepped = moveActive(-1, dir);
+      if(stepped){
+        const {r:rr, c:cc} = state.active;
+        if(!state.revealed[rr][cc]){
+          state.user[rr][cc] = '';
+          state.checked[rr][cc] = null;
+          updateCellLetter(rr, cc);
+        }
+      }
+    } else if(!state.revealed[r][c]){
+      state.user[r][c] = '';
+      state.checked[r][c] = null;
+      updateCellLetter(r, c);
+    }
+    persist();
+    updateStats();
+    return;
+  }
+
+  if(key === 'SWITCH'){
+    setActive(r, c, dir==='A' ? 'D' : 'A', true);
+    return;
+  }
+
+  // letter
+  if(/^[A-Za-z]$/.test(key)){
+    if(state.revealed[r][c]) {
+      moveActive(1, dir);
+      return;
+    }
+    state.user[r][c] = key.toUpperCase();
+    state.checked[r][c] = null;  // clear check status on edit
+    updateCellLetter(r, c);
+    persist();
+    updateStats();
+    // advance: if next cell is empty stay in word, else jump to next empty in word
+    const advanced = moveActive(1, dir);
+    if(!advanced || (state.user[state.active.r][state.active.c] !== '')){
+      jumpToNextEmptyInWord();
+    }
+  }
+}
+
+function updateCellLetter(r, c){
+  const letter = getLetter(r, c);
+  const cell = getCell(r, c);
+  if(letter) letter.textContent = state.user[r][c];
+  cell.classList.remove('correct','wrong');
+  if(state.checked[r][c] === true)  cell.classList.add('correct');
+  if(state.checked[r][c] === false) cell.classList.add('wrong');
+  if(state.revealed[r][c]) cell.classList.add('revealed');
+  // re-render solved-clue strikethrough + purple word fills
+  refreshSolvedClues();
+  refreshSolvedCells();
+}
+
+function refreshSolvedClues(){
+  // Intentionally a no-op. Used to add a strikethrough class to the clue list
+  // when a word was solved, but mutating mid-document DOM nodes was causing
+  // iOS to scroll. The cells themselves turn purple (refreshSolvedCells) and
+  // the floating cluebar shows the current clue, so the user has clear feedback
+  // without ever touching the static clue list.
+}
+
+function getWordLetters(start, dir){
+  let s = '';
+  for(let i=0;i<start.len;i++){
+    const rr = dir==='A' ? start.r : start.r+i;
+    const cc = dir==='A' ? start.c+i : start.c;
+    s += (state.user[rr][cc] || '_');
+  }
+  return s;
+}
+function expectedWord(start, dir){
+  // find the clue number to fetch the word
+  for(const [num, p] of Object.entries(dir==='A' ? acrossStarts : downStarts)){
+    if(p.r===start.r && p.c===start.c){
+      return (dir==='A' ? ACROSS[num] : DOWN[num]).word;
+    }
+  }
+  return '';
+}
+
+function refreshSolvedCells(){
+  // A cell becomes "solved-cell" if either its across or its down word is fully correct.
+  // Clear all first, then re-mark.
+  $grid.querySelectorAll('.cell.solved-cell').forEach(el => el.classList.remove('solved-cell'));
+
+  const markCells = (start, dir) => {
+    for(let i=0; i<start.len; i++){
+      const rr = dir==='A' ? start.r : start.r+i;
+      const cc = dir==='A' ? start.c+i : start.c;
+      const cell = getCell(rr, cc);
+      if(cell) cell.classList.add('solved-cell');
+    }
+  };
+  for(const num of Object.keys(ACROSS).map(Number)){
+    if(getWordLetters(acrossStarts[num],'A') === ACROSS[num].word){
+      markCells(acrossStarts[num], 'A');
+    }
+  }
+  for(const num of Object.keys(DOWN).map(Number)){
+    if(getWordLetters(downStarts[num],'D') === DOWN[num].word){
+      markCells(downStarts[num], 'D');
+    }
+  }
+}
+
+function updateStats(){
+  let solved = 0;
+  for(const num of Object.keys(ACROSS).map(Number)){
+    if(getWordLetters(acrossStarts[num],'A') === ACROSS[num].word) solved++;
+  }
+  for(const num of Object.keys(DOWN).map(Number)){
+    if(getWordLetters(downStarts[num],'D') === DOWN[num].word) solved++;
+  }
+  $statSolved.textContent = solved;
+
+  let total = 0, filled = 0;
+  for(let r=0;r<ROWS;r++) for(let c=0;c<COLS;c++){
+    if(FILLED[r][c]===1){ total++; if(state.user[r][c]) filled++; }
+  }
+  $statFilled.textContent = Math.round(100*filled/total) + '%';
+
+  return solved;
+}
+
+/* ============================================================
+ * MOBILE INPUT BRIDGE
+ *
+ * The grid does NOT contain real <input> elements. Per-cell focus is what
+ * causes iOS to scroll the page on every keystroke. Instead, we keep a single
+ * off-screen <input id="anchor"> focused at all times. All keystrokes flow
+ * through it, and we route them to the active cell ourselves.
+ * ============================================================ */
+const $anchor = document.getElementById('anchor');
+
+function focusAnchor(){
+  // The focus call must originate from a user gesture on iOS — that's why
+  // we always call this from a click handler, not from boot.
+  try { $anchor.focus({preventScroll:true}); } catch(e) { $anchor.focus(); }
+}
+
+// Tapping a cell: select it and re-focus the anchor.
+$grid.addEventListener('click', (e) => {
+  const cell = e.target.closest('.cell.cell-fill');
+  if(!cell) return;
+  const r = +cell.dataset.r, c = +cell.dataset.c;
+  if(state.active.r === r && state.active.c === c){
+    // tap same cell => toggle direction
+    setActive(r, c, state.active.dir==='A' ? 'D' : 'A', true);
+  } else {
+    // pick best initial direction
+    let dir = state.active.dir;
+    if(!cellAcross[r][c] && !cellDown[r][c]) return;
+    if(dir==='A' && !cellAcross[r][c]) dir='D';
+    else if(dir==='D' && !cellDown[r][c]) dir='A';
+    else if(!cellAcross[r][c]) dir='D';
+    else if(!cellDown[r][c]) dir='A';
+    setActive(r, c, dir, true);
+  }
+});
+
+// Letters arrive via `input` on the anchor (works for every mobile keyboard,
+// including IME and autocomplete suggestions).
+$anchor.addEventListener('input', () => {
+  const v = ($anchor.value || '').toUpperCase();
+  $anchor.value = '';   // always clear so next keystroke is a fresh event
+  for(const ch of v){
+    if(/^[A-Z]$/.test(ch)) handleKey(ch);
+  }
+});
+
+// Backspace, arrows, space, enter — captured at the document level.
+document.addEventListener('keydown', (e) => {
+  // Don't interfere with text input in the toast prompt or modal buttons
+  if(state.active.r < 0) return;
+  if(e.key === 'Backspace'){
+    e.preventDefault();
+    handleKey('BACK');
+  } else if(e.key === ' '){
+    // Only swap direction when the anchor is focused; otherwise let space scroll
+    if(document.activeElement === $anchor){
+      e.preventDefault();
+      handleKey('SWITCH');
+    }
+  } else if(e.key === 'ArrowRight'){ e.preventDefault(); moveActive(1, 'A'); }
+    else if(e.key === 'ArrowLeft'){  e.preventDefault(); moveActive(-1,'A'); }
+    else if(e.key === 'ArrowDown'){  e.preventDefault(); moveActive(1, 'D'); }
+    else if(e.key === 'ArrowUp'){    e.preventDefault(); moveActive(-1,'D'); }
+    else if(e.key === 'Enter'){ e.preventDefault(); nextClue(1); }
+    else if(e.key === 'Tab'){ e.preventDefault(); nextClue(e.shiftKey ? -1 : 1); }
+});
+
+// If the user taps elsewhere (e.g., a clue), the keyboard would normally close.
+// Re-focus anchor whenever a clue is tapped — already handled by setActive(true).
+// Also re-focus on any cell tap (handled above).
+
+/* ============================================================
+ * BUTTONS
+ * ============================================================ */
+document.getElementById('btn-check').addEventListener('click', () => {
+  let any = false;
+  for(let r=0;r<ROWS;r++) for(let c=0;c<COLS;c++){
+    if(FILLED[r][c]!==1) continue;
+    if(state.user[r][c]){
+      const correct = (state.user[r][c] === solutionLetter(r,c));
+      state.checked[r][c] = correct;
+      updateCellLetter(r, c);
+      any = true;
+    }
+  }
+  toast(any ? 'Checked' : 'Nothing to check yet');
+  persist();
+});
+
+document.getElementById('btn-reveal-letter').addEventListener('click', () => {
+  const {r, c} = state.active;
+  if(r<0){ toast('Select a cell first'); return; }
+  state.user[r][c] = solutionLetter(r,c);
+  state.revealed[r][c] = true;
+  state.checked[r][c] = true;
+  updateCellLetter(r, c);
+  persist(); updateStats();
+});
+
+document.getElementById('btn-reveal-word').addEventListener('click', () => {
+  const {r, c, dir} = state.active;
+  if(r<0){ toast('Select a clue first'); return; }
+  const num = dir==='A' ? cellAcross[r][c] : cellDown[r][c];
+  const start = dir==='A' ? acrossStarts[num] : downStarts[num];
+  for(let i=0;i<start.len;i++){
+    const rr = dir==='A' ? start.r : start.r+i;
+    const cc = dir==='A' ? start.c+i : start.c;
+    state.user[rr][cc] = solutionLetter(rr,cc);
+    state.revealed[rr][cc] = true;
+    state.checked[rr][cc] = true;
+    updateCellLetter(rr, cc);
+  }
+  persist(); updateStats();
+});
+
+document.getElementById('btn-clear').addEventListener('click', () => {
+  if(!confirm('Clear the whole board?')) return;
+  for(let r=0;r<ROWS;r++) for(let c=0;c<COLS;c++){
+    state.user[r][c] = '';
+    state.checked[r][c] = null;
+    state.revealed[r][c] = false;
+    if(FILLED[r][c]===1){
+      const cell = getCell(r,c);
+      cell.classList.remove('correct','wrong','revealed','solved-cell');
+      const letter = getLetter(r,c);
+      if(letter) letter.textContent = '';
+    }
+  }
+  refreshSolvedClues();
+  refreshSolvedCells();
+  persist(); updateStats();
+  toast('Board cleared');
+});
+
+document.getElementById('btn-finish').addEventListener('click', openFinish);
+document.getElementById('btn-keep').addEventListener('click', closeFinish);
+document.getElementById('btn-share').addEventListener('click', share);
+
+document.getElementById('prev-clue').addEventListener('click', () => nextClue(-1));
+document.getElementById('next-clue').addEventListener('click', () => nextClue(1));
+
+function solutionLetter(r, c){
+  // Build solution grid lazily once
+  if(!solutionLetter._cache){
+    const sol = Array.from({length: ROWS}, () => Array(COLS).fill(''));
+    for(const [num, {r:rr,c:cc,len}] of Object.entries(acrossStarts)){
+      const word = ACROSS[+num].word;
+      for(let i=0;i<len;i++) sol[rr][cc+i] = word[i];
+    }
+    for(const [num, {r:rr,c:cc,len}] of Object.entries(downStarts)){
+      const word = DOWN[+num].word;
+      for(let i=0;i<len;i++) sol[rr+i][cc] = word[i];
+    }
+    solutionLetter._cache = sol;
+  }
+  return solutionLetter._cache[r][c];
+}
+
+/* ============================================================
+ * PERSISTENCE (in-memory only, since Anthropic artifacts forbid storage,
+ * but for a standalone hosted page localStorage works fine.)
+ * ============================================================ */
+function persist(){
+  try{
+    const payload = {
+      user: state.user,
+      revealed: state.revealed,
+      startTime: state.startTime,
+    };
+    localStorage.setItem('edd-crossword', JSON.stringify(payload));
+  }catch(e){}
+}
+function restore(){
+  try{
+    const raw = localStorage.getItem('edd-crossword');
+    if(!raw) return;
+    const p = JSON.parse(raw);
+    if(p.user && p.user.length===ROWS){
+      state.user = p.user;
+      state.revealed = p.revealed || state.revealed;
+      state.startTime = p.startTime || Date.now();
+      for(let r=0;r<ROWS;r++) for(let c=0;c<COLS;c++){
+        if(FILLED[r][c]===1) updateCellLetter(r,c);
+      }
+    }
+  }catch(e){}
+}
+
+/* ============================================================
+ * FINISH + SHARE
+ * ============================================================ */
+function openFinish(){
+  const solved = updateStats();
+  document.getElementById('score-line').textContent = `${solved} / ${TOTAL_WORDS} solved`;
+  document.getElementById('modal-title').textContent =
+    solved === TOTAL_WORDS ? 'Perfect cup ☕✨' :
+    solved >= 22 ? 'Strong scoop!' :
+    solved >= 12 ? 'Nice pour' :
+    'Brewing nicely';
+  document.getElementById('modal-sub').textContent =
+    solved === TOTAL_WORDS ? 'Every word, no jitters.' :
+    `You filled ${solved} of ${TOTAL_WORDS} clues.`;
+
+  // build score grid: one square per clue (28), green if solved
+  const $sg = document.getElementById('scoregrid');
+  $sg.innerHTML = '';
+  const list = [];
+  Object.keys(ACROSS).map(Number).sort((a,b)=>a-b).forEach(n => list.push(['A', n]));
+  Object.keys(DOWN).map(Number).sort((a,b)=>a-b).forEach(n => list.push(['D', n]));
+  for(const [dir, num] of list){
+    const ok = (dir==='A')
+      ? getWordLetters(acrossStarts[num],'A') === ACROSS[num].word
+      : getWordLetters(downStarts[num],'D')   === DOWN[num].word;
+    const sp = document.createElement('span');
+    if(ok) sp.classList.add('ok');
+    $sg.appendChild(sp);
+  }
+  // time
+  const mins = Math.floor((Date.now()-state.startTime)/60000);
+  document.getElementById('time-line').textContent = mins>0 ? `Time: ${mins} min` : '';
+
+  document.getElementById('modal').classList.add('open');
+}
+function closeFinish(){
+  document.getElementById('modal').classList.remove('open');
+}
+
+async function share(){
+  const solved = updateStats();
+  // build emoji score grid (Wordle-style)
+  const list = [];
+  Object.keys(ACROSS).map(Number).sort((a,b)=>a-b).forEach(n => list.push(['A', n]));
+  Object.keys(DOWN).map(Number).sort((a,b)=>a-b).forEach(n => list.push(['D', n]));
+  let emoji = '';
+  list.forEach(([dir, num], i) => {
+    const ok = (dir==='A')
+      ? getWordLetters(acrossStarts[num],'A') === ACROSS[num].word
+      : getWordLetters(downStarts[num],'D')   === DOWN[num].word;
+    emoji += ok ? '🟩' : '⬜';
+    if((i+1)%7===0) emoji += '\n';
+  });
+
+  const url = location.href.split('#')[0];
+  const text = `EDD Crossword — ${solved}/28 ☕✨\n\n${emoji}\n${url}`;
+
+  if(navigator.share){
+    try{ await navigator.share({title: 'EDD Crossword', text}); }
+    catch(e){ /* user cancelled */ }
+  } else {
+    try{
+      await navigator.clipboard.writeText(text);
+      toast('Score copied to clipboard');
+    }catch(e){
+      prompt('Copy your score:', text);
+    }
+  }
+}
+
+/* ============================================================
+ * UTIL
+ * ============================================================ */
+let toastTimer = null;
+function toast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(()=>t.classList.remove('show'), 1600);
+}
+
+window.addEventListener('resize', () => { sizeGrid(); });
+
+/* ============================================================
+ * BOOT
+ * ============================================================ */
+buildGrid();
+buildClueLists();
+restore();
+updateStats();
+refreshSolvedClues();
+refreshSolvedCells();
+
+// auto-select the first clue (A3) so users see what to do
+(function startHint(){
+  const first = acrossStarts[3];
+  if(first) setActive(first.r, first.c, 'A', false);
+})();
+
+</script>
+</body>
+</html>
